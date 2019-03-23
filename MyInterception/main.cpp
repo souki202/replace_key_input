@@ -12,35 +12,35 @@
 #include <cctype>
 
 static constexpr int NUM_OF_KEYS = 256;
-static constexpr const TCHAR* GENERAL_PROCESS = "general";
-static constexpr const TCHAR* GENERAL_DEVICE_STRING = "general";
+static constexpr const wchar_t* GENERAL_PROCESS = L"general";
+static constexpr const wchar_t* GENERAL_DEVICE_STRING = L"general";
 static constexpr InterceptionDevice GENERAL_DEVICE = INT_MAX;
 
 enum class DeviceType {KEY_BOARD, MOUSE, INVALID};
 
 using KeyCodeType = unsigned char;
 using KeyMapType = std::array<int, NUM_OF_KEYS>;
-using ProcessKeyMapsType = std::unordered_map<std::string, KeyMapType>;
+using ProcessKeyMapsType = std::unordered_map<std::wstring, KeyMapType>;
 using DeviceKeyMapsType = std::unordered_map<InterceptionDevice, ProcessKeyMapsType>;
 
 InterceptionContext context;
-std::unordered_map<std::string, KeyCodeType> stringAndKeyCodeRelationMap = {};
+std::unordered_map<std::wstring, KeyCodeType> stringAndKeyCodeRelationMap = {};
 KeyMapType defaultKeyCodeMap = { {0} };
-std::unordered_map<std::string, InterceptionDevice> hidAndDeviceRelation;
+std::unordered_map<std::wstring, InterceptionDevice> hidAndDeviceRelation;
 std::unordered_map<InterceptionDevice, DeviceType> deviceTypeRelation;
 
 void init();
-std::string getTopWindowProcessName();
+std::wstring getTopWindowProcessName();
 DeviceKeyMapsType getKeyMaps(); // [HID][Process][OriginalKeyCode] = NewKeyCode
-KeyCodeType keyStringToKeyCode(std::string ch);
+KeyCodeType keyStringToKeyCode(std::wstring ch);
 
 
-static constexpr const TCHAR *s = "settings.ini";
+static constexpr const wchar_t *s = L"settings.ini";
 
-inline void deleteSpace(std::string& buf)
+inline void deleteSpace(std::wstring& buf)
 {
 	size_t pos;
-	while ((pos = buf.find_first_of(" \t")) != std::string::npos) {
+	while ((pos = buf.find_first_of(L" \t")) != std::wstring::npos) {
 		buf.erase(pos, 1);
 	}
 }
@@ -59,55 +59,76 @@ int main() {
 
 	while (interception_receive(context, device = interception_wait(context), &stroke, 1) > 0) {
 		// 最前面のプロセス名を取得
-		std::string foregroundProcessName = getTopWindowProcessName();
-		std::cout << foregroundProcessName << std::endl;
-		std::cout << "device: " << device << std::endl;
+		std::wstring foregroundProcessName = getTopWindowProcessName();
+		std::wcout << foregroundProcessName << std::endl;
+		std::wcout << L"device: " << device << std::endl;
 
 		auto deviceType = deviceTypeRelation.find(device);
 		if (deviceType->second == DeviceType::KEY_BOARD) {
-			InterceptionKeyStroke& s = *(InterceptionKeyStroke*)& stroke;
+			InterceptionKeyStroke& s = *(InterceptionKeyStroke*)& stroke; 
+#ifdef _DEBUG
+			std::wcout << L"Keyboard Input "
+			<< L"ScanCode=" << s.code
+			<< L" State=" << s.state << std::endl;
+#endif
 			{
 				auto hidKeyMaps = keyMaps.find(device);
 				ProcessKeyMapsType::iterator processKeyMap = (hidKeyMaps != keyMaps.end()) ? hidKeyMaps->second.find(foregroundProcessName) : generalHidKeyMapIterator->second.find(foregroundProcessName);
 				if (hidKeyMaps != keyMaps.end()) { // 該当HIDに設定がある
 					if (processKeyMap != hidKeyMaps->second.end()) { // 該当プロセスに設定がある
+#ifdef _DEBUG
+						if (s.code != processKeyMap->second[s.code]) {
+							std::wcout << "change code: " << s.code << std::endl;
+						}
+#endif
 						s.code = processKeyMap->second[s.code];
 					}
 					else { // 該当プロセスに設定がない
 						processKeyMap = hidKeyMaps->second.find(GENERAL_PROCESS);
 						if (processKeyMap != hidKeyMaps->second.end()) {
+#ifdef _DEBUG
+							if (s.code != processKeyMap->second[s.code]) {
+								std::wcout << "change code: " << s.code << std::endl;
+							}
+#endif
 							s.code = processKeyMap->second[s.code];
 						}
 					}
 				}
 				else {
 					if (processKeyMap != generalHidKeyMapIterator->second.end()) { // 該当プロセスに設定がある
+#ifdef _DEBUG
+						if (s.code != processKeyMap->second[s.code]) {
+							std::wcout << "change code: " << s.code << std::endl;
+						}
+#endif
 						s.code = processKeyMap->second[s.code];
 					}
 					else { // 該当プロセスに設定がない
 						processKeyMap = generalHidKeyMapIterator->second.find(GENERAL_PROCESS);
 						if (processKeyMap != generalHidKeyMapIterator->second.end()) {
+#ifdef _DEBUG
+							if (s.code != processKeyMap->second[s.code]) {
+								std::wcout << "change code: " << s.code << std::endl;
+							}
+#endif
 							s.code = processKeyMap->second[s.code];
 						}
 					}
 				}
 			}
 			interception_send(context, device, &stroke, 1);
-#ifdef _DEBUG
-			std::cout << "Keyboard Input "
-				<< "ScanCode=" << s.code
-				<< " State=" << s.state << std::endl;
-#endif
+
 		}
 		else if (deviceType->second == DeviceType::MOUSE) { // 未実装
 			InterceptionMouseStroke& s = *(InterceptionMouseStroke*)& stroke;
 			interception_send(context, device, &stroke, 1);
 #ifdef _DEBUG
-			std::cout << "Mouse Input"
-				<< " State=" << s.state
-				<< " Rolling=" << s.rolling
-				<< " Flags=" << s.flags
-				<< " (x,y)=(" << s.x << "," << s.y << ")"
+			std::wcout << L"Mouse Input"
+				<< L" State=" << s.state
+				<< L" Rolling=" << s.rolling
+				<< L" Flags=" << s.flags
+				<< L" (x,y)=(" << s.x << L"," << s.y << L")"
 				<< std::endl;
 #endif
 		}
@@ -116,7 +137,7 @@ int main() {
 			interception_send(context, device, &stroke, 1);
 		}
 #ifdef _DEBUG
-		std::cout << std::endl;
+		std::wcout << std::endl;
 #endif
 	}
 	return 0;
@@ -142,7 +163,7 @@ void init() {
 
 	// HIDとデバイスを紐付ける
 	InterceptionDevice keyboard = INTERCEPTION_MAX_DEVICE, mouse = INTERCEPTION_MAX_DEVICE;
-	TCHAR buf[500] = { 0 };
+	WCHAR buf[500] = { 0 };
 	for (int i = 0; i < INTERCEPTION_MAX_KEYBOARD; i++) {
 		InterceptionDevice d = INTERCEPTION_KEYBOARD(i);
 		if (interception_get_hardware_id(context, d, buf, sizeof(buf))) {
@@ -161,71 +182,71 @@ void init() {
 	// 文字からキーコードに変換する用のマップを作成
 	std::iota(defaultKeyCodeMap.begin(), defaultKeyCodeMap.end(), 0);
 
-	stringAndKeyCodeRelationMap["esc"] = 1;
-	stringAndKeyCodeRelationMap["1"] = 2;
-	stringAndKeyCodeRelationMap["2"] = 3;
-	stringAndKeyCodeRelationMap["3"] = 4;
-	stringAndKeyCodeRelationMap["4"] = 5;
-	stringAndKeyCodeRelationMap["5"] = 6;
-	stringAndKeyCodeRelationMap["6"] = 7;
-	stringAndKeyCodeRelationMap["7"] = 8;
-	stringAndKeyCodeRelationMap["8"] = 9;
-	stringAndKeyCodeRelationMap["9"] = 10;
-	stringAndKeyCodeRelationMap["0"] = 11;
-	stringAndKeyCodeRelationMap["-"] = 12;
-	stringAndKeyCodeRelationMap["="] = 12;
-	stringAndKeyCodeRelationMap["^"] = 13;
-	stringAndKeyCodeRelationMap["up"] = 72;
-	stringAndKeyCodeRelationMap["left"] = 75;
-	stringAndKeyCodeRelationMap["right"] = 77;
-	stringAndKeyCodeRelationMap["down"] = 80;
-	stringAndKeyCodeRelationMap["~"] = 13;
-	stringAndKeyCodeRelationMap["bs"] = 14;
-	stringAndKeyCodeRelationMap["tab"] = 15;
-	stringAndKeyCodeRelationMap["enter"] = 28;
-	stringAndKeyCodeRelationMap["capclock"] = 58;
-	stringAndKeyCodeRelationMap["|"] = 125;
-	stringAndKeyCodeRelationMap["]"] = 43;
-	stringAndKeyCodeRelationMap["_"] = 115;
-	stringAndKeyCodeRelationMap["lshift"] = 42;
-	stringAndKeyCodeRelationMap["rshift"] = 54;
-	stringAndKeyCodeRelationMap["lctrl"] = 29;
-	stringAndKeyCodeRelationMap["lalt"] = 56;
-	stringAndKeyCodeRelationMap["noconvert"] = 123;
-	stringAndKeyCodeRelationMap["lwin"] = 91;
-	stringAndKeyCodeRelationMap["rwin"] = 92;
-	stringAndKeyCodeRelationMap["space"] = 57;
-	stringAndKeyCodeRelationMap["convert"] = 121;
-	stringAndKeyCodeRelationMap["hirakana"] = 112;
-	stringAndKeyCodeRelationMap["F1"] = 59;
-	stringAndKeyCodeRelationMap["F2"] = 60;
-	stringAndKeyCodeRelationMap["F3"] = 61;
-	stringAndKeyCodeRelationMap["F4"] = 62;
-	stringAndKeyCodeRelationMap["F5"] = 63;
-	stringAndKeyCodeRelationMap["F6"] = 64;
-	stringAndKeyCodeRelationMap["F7"] = 65;
-	stringAndKeyCodeRelationMap["F8"] = 66;
-	stringAndKeyCodeRelationMap["F9"] = 67;
-	stringAndKeyCodeRelationMap["F10"] = 68;
-	stringAndKeyCodeRelationMap["F11"] = 87;
-	stringAndKeyCodeRelationMap["F12"] = 88;
-	std::string keys = "qwertyuiop@[";
+	stringAndKeyCodeRelationMap[L"esc"] = 1;
+	stringAndKeyCodeRelationMap[L"1"] = 2;
+	stringAndKeyCodeRelationMap[L"2"] = 3;
+	stringAndKeyCodeRelationMap[L"3"] = 4;
+	stringAndKeyCodeRelationMap[L"4"] = 5;
+	stringAndKeyCodeRelationMap[L"5"] = 6;
+	stringAndKeyCodeRelationMap[L"6"] = 7;
+	stringAndKeyCodeRelationMap[L"7"] = 8;
+	stringAndKeyCodeRelationMap[L"8"] = 9;
+	stringAndKeyCodeRelationMap[L"9"] = 10;
+	stringAndKeyCodeRelationMap[L"0"] = 11;
+	stringAndKeyCodeRelationMap[L"-"] = 12;
+	stringAndKeyCodeRelationMap[L"="] = 12;
+	stringAndKeyCodeRelationMap[L"^"] = 13;
+	stringAndKeyCodeRelationMap[L"up"] = 72;
+	stringAndKeyCodeRelationMap[L"left"] = 75;
+	stringAndKeyCodeRelationMap[L"right"] = 77;
+	stringAndKeyCodeRelationMap[L"down"] = 80;
+	stringAndKeyCodeRelationMap[L"~"] = 13;
+	stringAndKeyCodeRelationMap[L"bs"] = 14;
+	stringAndKeyCodeRelationMap[L"tab"] = 15;
+	stringAndKeyCodeRelationMap[L"enter"] = 28;
+	stringAndKeyCodeRelationMap[L"capclock"] = 58;
+	stringAndKeyCodeRelationMap[L"|"] = 125;
+	stringAndKeyCodeRelationMap[L"]"] = 43;
+	stringAndKeyCodeRelationMap[L"_"] = 115;
+	stringAndKeyCodeRelationMap[L"lshift"] = 42;
+	stringAndKeyCodeRelationMap[L"rshift"] = 54;
+	stringAndKeyCodeRelationMap[L"lctrl"] = 29;
+	stringAndKeyCodeRelationMap[L"lalt"] = 56;
+	stringAndKeyCodeRelationMap[L"noconvert"] = 123;
+	stringAndKeyCodeRelationMap[L"lwin"] = 91;
+	stringAndKeyCodeRelationMap[L"rwin"] = 92;
+	stringAndKeyCodeRelationMap[L"space"] = 57;
+	stringAndKeyCodeRelationMap[L"convert"] = 121;
+	stringAndKeyCodeRelationMap[L"hirakana"] = 112;
+	stringAndKeyCodeRelationMap[L"F1"] = 59;
+	stringAndKeyCodeRelationMap[L"F2"] = 60;
+	stringAndKeyCodeRelationMap[L"F3"] = 61;
+	stringAndKeyCodeRelationMap[L"F4"] = 62;
+	stringAndKeyCodeRelationMap[L"F5"] = 63;
+	stringAndKeyCodeRelationMap[L"F6"] = 64;
+	stringAndKeyCodeRelationMap[L"F7"] = 65;
+	stringAndKeyCodeRelationMap[L"F8"] = 66;
+	stringAndKeyCodeRelationMap[L"F9"] = 67;
+	stringAndKeyCodeRelationMap[L"F10"] = 68;
+	stringAndKeyCodeRelationMap[L"F11"] = 87;
+	stringAndKeyCodeRelationMap[L"F12"] = 88;
+	std::wstring keys = L"qwertyuiop@[";
 	for (int i = 0; i < keys.size(); i++) {
 		stringAndKeyCodeRelationMap[keys.substr(i, 1)] = 16 + i;
 	}
-	keys = "asdfghjkl;:";
+	keys = L"asdfghjkl;:";
 	for (int i = 0; i < keys.size(); i++) {
 		stringAndKeyCodeRelationMap[keys.substr(i, 1)] = 30 + i;
 	}
-	keys = "zxcvbnm,./";
+	keys = L"zxcvbnm,./";
 	for (int i = 0; i < keys.size(); i++) {
 		stringAndKeyCodeRelationMap[keys.substr(i, 1)] = 44 + i;
 	}
 }
 
-std::string getTopWindowProcessName() {
+std::wstring getTopWindowProcessName() {
 	DWORD lpdwProcessId;
-	TCHAR processName[MAX_PATH] = { 0 };
+	wchar_t processName[MAX_PATH] = { 0 };
 
 	// 最前面のウィンドウを取得
 	HWND hWnd = GetForegroundWindow();
@@ -242,13 +263,13 @@ std::string getTopWindowProcessName() {
 	return processName;
 }
 
-KeyCodeType keyStringToKeyCode(std::string ch) {
+KeyCodeType keyStringToKeyCode(std::wstring ch) {
 	if (stringAndKeyCodeRelationMap.count(ch)) { // 該当のキーが有る
 		return stringAndKeyCodeRelationMap[ch];
 	}
 
-	if (ch.size() > 4 && ch.find("code") == 0) { // その他でcodexxの形ならキーコードが入っているはず
-		std::string rawCode = ch.substr(4);
+	if (ch.size() > 4 && ch.find(L"code") == 0) { // その他でcodexxの形ならキーコードが入っているはず
+		std::wstring rawCode = ch.substr(4);
 		if (std::all_of(rawCode.cbegin(), rawCode.cend(), std::isdigit)) {
 			int code = std::stoi(rawCode);
 			if (0 <= code && code < NUM_OF_KEYS) {
@@ -262,13 +283,13 @@ KeyCodeType keyStringToKeyCode(std::string ch) {
 
 DeviceKeyMapsType getKeyMaps() {
 	DeviceKeyMapsType keyMaps;
-	std::unordered_map<InterceptionDevice, std::unordered_map<std::string, std::unordered_map<KeyCodeType, KeyCodeType>>> tmpKeyMaps;
+	std::unordered_map<InterceptionDevice, std::unordered_map<std::wstring, std::unordered_map<KeyCodeType, KeyCodeType>>> tmpKeyMaps;
 	keyMaps.insert(std::make_pair(NULL, ProcessKeyMapsType()));
 	keyMaps[GENERAL_DEVICE].insert(std::make_pair(GENERAL_PROCESS, defaultKeyCodeMap));
 
 	// 設定読み込み
-	std::ifstream ifs(s);
-	std::string line, section = "";
+	std::wifstream ifs(s);
+	std::wstring line, section = L"";
 	InterceptionDevice device = GENERAL_DEVICE;
 	while (std::getline(ifs, line)) {
 		deleteSpace(line);
@@ -278,8 +299,8 @@ DeviceKeyMapsType getKeyMaps() {
 		// hid
 		if (line.size() >= 5
 			&& line.front() == '[' && line[1] == '[' && line.back() == ']' && line[line.size() - 2] == ']') {
-			std::string hid = line.substr(2, line.size() - 4);
-			std::cout << "setting HID:" << hid << std::endl;
+			std::wstring hid = line.substr(2, line.size() - 4);
+			std::wcout << L"setting HID: " << hid << std::endl;
 
 			if (hid == GENERAL_DEVICE_STRING) {
 				device = GENERAL_DEVICE;
@@ -287,13 +308,13 @@ DeviceKeyMapsType getKeyMaps() {
 			}
 
 			// HIDに対応するデバイスが存在しない
-			if (hidAndDeviceRelation.count(hid)) {
+			if (!hidAndDeviceRelation.count(hid)) {
 				continue;
 			}
 
 			device = hidAndDeviceRelation[hid];
 			if (!keyMaps.count(device)) {
-				tmpKeyMaps.insert(std::make_pair(device, std::unordered_map<std::string, std::unordered_map<KeyCodeType, KeyCodeType>>()));
+				tmpKeyMaps.insert(std::make_pair(device, std::unordered_map<std::wstring, std::unordered_map<KeyCodeType, KeyCodeType>>()));
 			}
 			continue;
 		}
@@ -301,7 +322,7 @@ DeviceKeyMapsType getKeyMaps() {
 		// section
 		if (line.front() == '[' && line.back() == ']') {
 			section = line.substr(1, line.size() - 2);
-			std::cout << "setting process name: " << section << std::endl;
+			std::wcout << L"setting process name: " << section << std::endl;
 			if (!keyMaps[device].count(section)) {
 				tmpKeyMaps[device].insert(std::make_pair(section, std::unordered_map<KeyCodeType, KeyCodeType>()));
 			}
@@ -309,7 +330,7 @@ DeviceKeyMapsType getKeyMaps() {
 		}
 
 		// key = value
-		size_t equalPos = std::string::npos;
+		size_t equalPos = std::wstring::npos;
 		enum class State {NORMAL, ESCAPED};
 		State state = State::NORMAL;
 		int pos = 0;
@@ -334,13 +355,13 @@ DeviceKeyMapsType getKeyMaps() {
 			pos++;
 		}
 		// 正しい = が見つからなかった
-		if (!equalPos || equalPos == std::string::npos) {
+		if (!equalPos || equalPos == std::wstring::npos) {
 			continue;
 		}
-		std::string key = line.substr(0, equalPos);
-		std::string value = line.substr(equalPos + 1);
+		std::wstring key = line.substr(0, equalPos);
+		std::wstring value = line.substr(equalPos + 1);
 		tmpKeyMaps[device][section][keyStringToKeyCode(key)] = keyStringToKeyCode(value);
-		std::cout << "assign key: " << keyStringToKeyCode(key) << " to " << keyStringToKeyCode(value) << std::endl;
+		std::wcout << L"assign key: " << keyStringToKeyCode(key) << L" to " << keyStringToKeyCode(value) << std::endl;
 	}
 
 	for (auto eachHidKeyMaps : tmpKeyMaps) {

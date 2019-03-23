@@ -52,8 +52,11 @@ void init() {
         INTERCEPTION_KEY_E0 |
         INTERCEPTION_KEY_E1
     );
+    // クリックをフィルターに追加すると, コンソール内でドラッグ等したときに操作できなくなる問題があるので, ここでは入れない.
     interception_set_filter(context, interception_is_mouse,
-        INTERCEPTION_FILTER_MOUSE_ALL
+        INTERCEPTION_MOUSE_WHEEL |
+        INTERCEPTION_FILTER_MOUSE_MIDDLE_BUTTON_DOWN |
+        INTERCEPTION_FILTER_MOUSE_MIDDLE_BUTTON_UP
     );
 
     // HIDとデバイスを紐付ける

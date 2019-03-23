@@ -13,6 +13,7 @@ void init();
 
 int main() {
 	init();
+	if (!context) return 0;
 
 	// 入力を処理する
 	InterceptionDevice device;
@@ -49,11 +50,10 @@ void init() {
 		INTERCEPTION_FILTER_KEY_DOWN |
 		INTERCEPTION_FILTER_KEY_UP |
 		INTERCEPTION_KEY_E0 |
-		INTERCEPTION_KEY_E1);
+		INTERCEPTION_KEY_E1
+	);
 	interception_set_filter(context, interception_is_mouse,
-		INTERCEPTION_MOUSE_WHEEL |
-		INTERCEPTION_FILTER_MOUSE_MIDDLE_BUTTON_DOWN |
-		INTERCEPTION_FILTER_MOUSE_MIDDLE_BUTTON_UP
+		INTERCEPTION_FILTER_MOUSE_ALL
 	);
 
 	// HIDとデバイスを紐付ける

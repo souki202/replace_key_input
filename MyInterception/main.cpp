@@ -48,6 +48,7 @@ inline void deleteSpace(std::string& buf)
 
 int main() {
 	init();
+	if (!context) return 0;
 
 	// ボタン押させるたびにini(もどき)を読むわけに行かないので, 先にすべて読みこんでおく
 	auto keyMaps = getKeyMaps();

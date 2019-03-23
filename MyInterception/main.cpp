@@ -75,8 +75,8 @@ int main() {
                 << "Code=" << s.code 
                 << " State=" << s.state
                 << std::endl;
-            int oldState = s.state;
 #endif
+            int oldState = s.state;
             {
                 auto hidKeyMaps = keyMaps.find(device);
                 ProcessKeyMapsType::iterator processKeyMap = (hidKeyMaps != keyMaps.end()) ? hidKeyMaps->second.find(foregroundProcessName) : generalHidKeyMapIterator->second.find(foregroundProcessName);

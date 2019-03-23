@@ -25,6 +25,7 @@ using DeviceKeyMapsType = std::unordered_map<InterceptionDevice, ProcessKeyMapsT
 
 InterceptionContext context;
 std::unordered_map<std::string, KeyCodeType> stringAndKeyCodeRelationMap = {};
+std::array<KeyCodeType, 256> keyCodeAndStateRelationMap = {};
 KeyMapType defaultKeyCodeMap = { {0} };
 std::unordered_map<std::string, InterceptionDevice> hidAndDeviceRelation;
 std::unordered_map<InterceptionDevice, DeviceType> deviceTypeRelation;
@@ -74,6 +75,7 @@ int main() {
                 << "Code=" << s.code 
                 << " State=" << s.state
                 << std::endl;
+            int oldState = s.state;
 #endif
             {
                 auto hidKeyMaps = keyMaps.find(device);
@@ -121,6 +123,9 @@ int main() {
                     }
                 }
             }
+            int newState = keyCodeAndStateRelationMap[s.code];
+            if (oldState >= 2 && newState < 2) s.state -= 2;
+            else if (oldState < 2 && newState >= 2) s.state += 2;
             interception_send(context, device, &stroke, 1);
 
         }
@@ -191,6 +196,7 @@ void init() {
 
     // 文字からキーコードに変換する用のマップを作成
     std::iota(defaultKeyCodeMap.begin(), defaultKeyCodeMap.end(), 0);
+    keyCodeAndStateRelationMap.fill(0);
 
     stringAndKeyCodeRelationMap["esc"] = 1;
     stringAndKeyCodeRelationMap["1"] = 2;
@@ -209,6 +215,10 @@ void init() {
     stringAndKeyCodeRelationMap["left"] = 75;
     stringAndKeyCodeRelationMap["right"] = 77;
     stringAndKeyCodeRelationMap["down"] = 80;
+    keyCodeAndStateRelationMap[72] = 2;
+    keyCodeAndStateRelationMap[75] = 2;
+    keyCodeAndStateRelationMap[77] = 2;
+    keyCodeAndStateRelationMap[80] = 2;
     stringAndKeyCodeRelationMap["~"] = 13;
     stringAndKeyCodeRelationMap["bs"] = 14;
     stringAndKeyCodeRelationMap["tab"] = 15;
@@ -371,7 +381,7 @@ DeviceKeyMapsType getKeyMaps() {
         std::string key = line.substr(0, equalPos);
         std::string value = line.substr(equalPos + 1);
         tmpKeyMaps[device][section][keyStringToKeyCode(key)] = keyStringToKeyCode(value);
-        std::cout << "assign key: " << keyStringToKeyCode(key) << " to " << keyStringToKeyCode(value) << std::endl;
+        std::cout << "assign key: " << static_cast<int>(keyStringToKeyCode(key)) << " to " << static_cast<int>(keyStringToKeyCode(value)) << std::endl;
     }
 
     for (auto eachHidKeyMaps : tmpKeyMaps) {

@@ -13,6 +13,7 @@
 
 static constexpr int NUM_OF_KEYS = 256;
 static constexpr const TCHAR* GENERAL_PROCESS = "general";
+static constexpr const TCHAR* GENERAL_DEVICE_STRING = "general";
 static constexpr InterceptionDevice GENERAL_DEVICE = INT_MAX;
 
 enum class DeviceType {KEY_BOARD, MOUSE, INVALID};
@@ -60,6 +61,7 @@ int main() {
 		// 最前面のプロセス名を取得
 		std::string foregroundProcessName = getTopWindowProcessName();
 		std::cout << foregroundProcessName << std::endl;
+		std::cout << "device: " << device << std::endl;
 
 		auto deviceType = deviceTypeRelation.find(device);
 		if (deviceType->second == DeviceType::KEY_BOARD) {
@@ -78,27 +80,44 @@ int main() {
 						}
 					}
 				}
+				else {
+					if (processKeyMap != generalHidKeyMapIterator->second.end()) { // 該当プロセスに設定がある
+						s.code = processKeyMap->second[s.code];
+					}
+					else { // 該当プロセスに設定がない
+						processKeyMap = generalHidKeyMapIterator->second.find(GENERAL_PROCESS);
+						if (processKeyMap != generalHidKeyMapIterator->second.end()) {
+							s.code = processKeyMap->second[s.code];
+						}
+					}
+				}
 			}
 			interception_send(context, device, &stroke, 1);
+#ifdef _DEBUG
 			std::cout << "Keyboard Input "
 				<< "ScanCode=" << s.code
 				<< " State=" << s.state << std::endl;
+#endif
 		}
 		else if (deviceType->second == DeviceType::MOUSE) { // 未実装
 			InterceptionMouseStroke& s = *(InterceptionMouseStroke*)& stroke;
 			interception_send(context, device, &stroke, 1);
+#ifdef _DEBUG
 			std::cout << "Mouse Input"
 				<< " State=" << s.state
 				<< " Rolling=" << s.rolling
 				<< " Flags=" << s.flags
 				<< " (x,y)=(" << s.x << "," << s.y << ")"
 				<< std::endl;
+#endif
 		}
 		else {
 			//他のデバイスの入力は通過させる
 			interception_send(context, device, &stroke, 1);
 		}
-		std::cout << "device: " << device << std::endl;
+#ifdef _DEBUG
+		std::cout << std::endl;
+#endif
 	}
 	return 0;
 }
@@ -124,14 +143,14 @@ void init() {
 	// HIDとデバイスを紐付ける
 	InterceptionDevice keyboard = INTERCEPTION_MAX_DEVICE, mouse = INTERCEPTION_MAX_DEVICE;
 	TCHAR buf[500] = { 0 };
-	for (size_t i = 0; i < INTERCEPTION_MAX_KEYBOARD; i++) {
+	for (int i = 0; i < INTERCEPTION_MAX_KEYBOARD; i++) {
 		InterceptionDevice d = INTERCEPTION_KEYBOARD(i);
 		if (interception_get_hardware_id(context, d, buf, sizeof(buf))) {
 			hidAndDeviceRelation[buf] = d;
 			deviceTypeRelation[d] = DeviceType::KEY_BOARD;
 		}
 	}
-	for (size_t i = 0; i < INTERCEPTION_MAX_MOUSE; i++) {
+	for (int i = 0; i < INTERCEPTION_MAX_MOUSE; i++) {
 		InterceptionDevice d = INTERCEPTION_MOUSE(i);
 		if (interception_get_hardware_id(context, d, buf, sizeof(buf))) {
 			hidAndDeviceRelation[buf] = d;
@@ -142,6 +161,7 @@ void init() {
 	// 文字からキーコードに変換する用のマップを作成
 	std::iota(defaultKeyCodeMap.begin(), defaultKeyCodeMap.end(), 0);
 
+	stringAndKeyCodeRelationMap["esc"] = 1;
 	stringAndKeyCodeRelationMap["1"] = 2;
 	stringAndKeyCodeRelationMap["2"] = 3;
 	stringAndKeyCodeRelationMap["3"] = 4;
@@ -155,11 +175,40 @@ void init() {
 	stringAndKeyCodeRelationMap["-"] = 12;
 	stringAndKeyCodeRelationMap["="] = 12;
 	stringAndKeyCodeRelationMap["^"] = 13;
+	stringAndKeyCodeRelationMap["up"] = 72;
+	stringAndKeyCodeRelationMap["left"] = 75;
+	stringAndKeyCodeRelationMap["right"] = 77;
+	stringAndKeyCodeRelationMap["down"] = 80;
 	stringAndKeyCodeRelationMap["~"] = 13;
 	stringAndKeyCodeRelationMap["bs"] = 14;
 	stringAndKeyCodeRelationMap["tab"] = 15;
+	stringAndKeyCodeRelationMap["enter"] = 28;
 	stringAndKeyCodeRelationMap["capclock"] = 58;
 	stringAndKeyCodeRelationMap["|"] = 125;
+	stringAndKeyCodeRelationMap["]"] = 43;
+	stringAndKeyCodeRelationMap["_"] = 115;
+	stringAndKeyCodeRelationMap["lshift"] = 42;
+	stringAndKeyCodeRelationMap["rshift"] = 54;
+	stringAndKeyCodeRelationMap["lctrl"] = 29;
+	stringAndKeyCodeRelationMap["lalt"] = 56;
+	stringAndKeyCodeRelationMap["noconvert"] = 123;
+	stringAndKeyCodeRelationMap["lwin"] = 91;
+	stringAndKeyCodeRelationMap["rwin"] = 92;
+	stringAndKeyCodeRelationMap["space"] = 57;
+	stringAndKeyCodeRelationMap["convert"] = 121;
+	stringAndKeyCodeRelationMap["hirakana"] = 112;
+	stringAndKeyCodeRelationMap["F1"] = 59;
+	stringAndKeyCodeRelationMap["F2"] = 60;
+	stringAndKeyCodeRelationMap["F3"] = 61;
+	stringAndKeyCodeRelationMap["F4"] = 62;
+	stringAndKeyCodeRelationMap["F5"] = 63;
+	stringAndKeyCodeRelationMap["F6"] = 64;
+	stringAndKeyCodeRelationMap["F7"] = 65;
+	stringAndKeyCodeRelationMap["F8"] = 66;
+	stringAndKeyCodeRelationMap["F9"] = 67;
+	stringAndKeyCodeRelationMap["F10"] = 68;
+	stringAndKeyCodeRelationMap["F11"] = 87;
+	stringAndKeyCodeRelationMap["F12"] = 88;
 	std::string keys = "qwertyuiop@[";
 	for (int i = 0; i < keys.size(); i++) {
 		stringAndKeyCodeRelationMap[keys.substr(i, 1)] = 16 + i;
@@ -168,8 +217,10 @@ void init() {
 	for (int i = 0; i < keys.size(); i++) {
 		stringAndKeyCodeRelationMap[keys.substr(i, 1)] = 30 + i;
 	}
-	stringAndKeyCodeRelationMap["]"] = 43;
-
+	keys = "zxcvbnm,./";
+	for (int i = 0; i < keys.size(); i++) {
+		stringAndKeyCodeRelationMap[keys.substr(i, 1)] = 44 + i;
+	}
 }
 
 std::string getTopWindowProcessName() {
@@ -196,10 +247,13 @@ KeyCodeType keyStringToKeyCode(std::string ch) {
 		return stringAndKeyCodeRelationMap[ch];
 	}
 
-	if (std::all_of(ch.cbegin(), ch.cend(), std::isdigit)) { // 全部数値ならキーコードが入っている(はず)
-		int code = std::stoi(ch);
-		if (0 <= code && code < NUM_OF_KEYS) {
-			return code;
+	if (ch.size() > 4 && ch.find("code") == 0) { // その他でcodexxの形ならキーコードが入っているはず
+		std::string rawCode = ch.substr(4);
+		if (std::all_of(rawCode.cbegin(), rawCode.cend(), std::isdigit)) {
+			int code = std::stoi(rawCode);
+			if (0 <= code && code < NUM_OF_KEYS) {
+				return code;
+			}
 		}
 	}
 
@@ -226,6 +280,12 @@ DeviceKeyMapsType getKeyMaps() {
 			&& line.front() == '[' && line[1] == '[' && line.back() == ']' && line[line.size() - 2] == ']') {
 			std::string hid = line.substr(2, line.size() - 4);
 			std::cout << "setting HID:" << hid << std::endl;
+
+			if (hid == GENERAL_DEVICE_STRING) {
+				device = GENERAL_DEVICE;
+				continue;
+			}
+
 			// HIDに対応するデバイスが存在しない
 			if (hidAndDeviceRelation.count(hid)) {
 				continue;

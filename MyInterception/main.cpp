@@ -80,7 +80,7 @@ int main() {
 					if (processKeyMap != hidKeyMaps->second.end()) { // 該当プロセスに設定がある
 #ifdef _DEBUG
 						if (s.code != processKeyMap->second[s.code]) {
-							std::cout << "change code: " << s.code << std::endl;
+							std::cout << "change code: " << processKeyMap->second[s.code] << std::endl;
 						}
 #endif
 						s.code = processKeyMap->second[s.code];
@@ -90,7 +90,7 @@ int main() {
 						if (processKeyMap != hidKeyMaps->second.end()) {
 #ifdef _DEBUG
 							if (s.code != processKeyMap->second[s.code]) {
-								std::cout << "change code: " << s.code << std::endl;
+								std::cout << "change code: " << processKeyMap->second[s.code] << std::endl;
 							}
 #endif
 							s.code = processKeyMap->second[s.code];
@@ -101,7 +101,7 @@ int main() {
 					if (processKeyMap != generalHidKeyMapIterator->second.end()) { // 該当プロセスに設定がある
 #ifdef _DEBUG
 						if (s.code != processKeyMap->second[s.code]) {
-							std::cout << "change code: " << s.code << std::endl;
+							std::cout << "change code: " << processKeyMap->second[s.code] << std::endl;
 						}
 #endif
 						s.code = processKeyMap->second[s.code];
@@ -111,7 +111,7 @@ int main() {
 						if (processKeyMap != generalHidKeyMapIterator->second.end()) {
 #ifdef _DEBUG
 							if (s.code != processKeyMap->second[s.code]) {
-								std::cout << "change code: " << s.code << std::endl;
+								std::cout << "change code: " << processKeyMap->second[s.code] << std::endl;
 							}
 #endif
 							s.code = processKeyMap->second[s.code];

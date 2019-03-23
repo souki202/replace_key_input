@@ -12,35 +12,35 @@
 #include <cctype>
 
 static constexpr int NUM_OF_KEYS = 256;
-static constexpr const wchar_t* GENERAL_PROCESS = L"general";
-static constexpr const wchar_t* GENERAL_DEVICE_STRING = L"general";
+static constexpr const char* GENERAL_PROCESS = "general";
+static constexpr const char* GENERAL_DEVICE_STRING = "general";
 static constexpr InterceptionDevice GENERAL_DEVICE = INT_MAX;
 
 enum class DeviceType {KEY_BOARD, MOUSE, INVALID};
 
 using KeyCodeType = unsigned char;
 using KeyMapType = std::array<int, NUM_OF_KEYS>;
-using ProcessKeyMapsType = std::unordered_map<std::wstring, KeyMapType>;
+using ProcessKeyMapsType = std::unordered_map<std::string, KeyMapType>;
 using DeviceKeyMapsType = std::unordered_map<InterceptionDevice, ProcessKeyMapsType>;
 
 InterceptionContext context;
-std::unordered_map<std::wstring, KeyCodeType> stringAndKeyCodeRelationMap = {};
+std::unordered_map<std::string, KeyCodeType> stringAndKeyCodeRelationMap = {};
 KeyMapType defaultKeyCodeMap = { {0} };
-std::unordered_map<std::wstring, InterceptionDevice> hidAndDeviceRelation;
+std::unordered_map<std::string, InterceptionDevice> hidAndDeviceRelation;
 std::unordered_map<InterceptionDevice, DeviceType> deviceTypeRelation;
 
 void init();
-std::wstring getTopWindowProcessName();
+std::string getTopWindowProcessName();
 DeviceKeyMapsType getKeyMaps(); // [HID][Process][OriginalKeyCode] = NewKeyCode
-KeyCodeType keyStringToKeyCode(std::wstring ch);
+KeyCodeType keyStringToKeyCode(std::string ch);
 
 
-static constexpr const wchar_t *s = L"settings.ini";
+static constexpr const char *s = "settings.ini";
 
-inline void deleteSpace(std::wstring& buf)
+inline void deleteSpace(std::string& buf)
 {
 	size_t pos;
-	while ((pos = buf.find_first_of(L" \t")) != std::wstring::npos) {
+	while ((pos = buf.find_first_of(" \t")) != std::string::npos) {
 		buf.erase(pos, 1);
 	}
 }
@@ -49,46 +49,48 @@ inline void deleteSpace(std::wstring& buf)
 int main() {
 	init();
 
-	// ƒ{ƒ^ƒ“‰Ÿ‚³‚¹‚é‚½‚Ñ‚Éini(‚à‚Ç‚«)‚ğ“Ç‚Ş‚í‚¯‚És‚©‚È‚¢‚Ì‚Å, æ‚É‚·‚×‚Ä“Ç‚İ‚±‚ñ‚Å‚¨‚­
+	// ãƒœã‚¿ãƒ³æŠ¼ã•ã›ã‚‹ãŸã³ã«ini(ã‚‚ã©ã)ã‚’èª­ã‚€ã‚ã‘ã«è¡Œã‹ãªã„ã®ã§, å…ˆã«ã™ã¹ã¦èª­ã¿ã“ã‚“ã§ãŠã
 	auto keyMaps = getKeyMaps();
 	auto generalHidKeyMapIterator = keyMaps.find(GENERAL_DEVICE);
 
 	InterceptionDevice device;
 	InterceptionStroke stroke;
 
+	std::cout << "ã‚­ãƒ¼å…¥åŠ›å—ä»˜ä¸­..." << std::endl;
 
 	while (interception_receive(context, device = interception_wait(context), &stroke, 1) > 0) {
-		// Å‘O–Ê‚ÌƒvƒƒZƒX–¼‚ğæ“¾
-		std::wstring foregroundProcessName = getTopWindowProcessName();
-		std::wcout << foregroundProcessName << std::endl;
-		std::wcout << L"device: " << device << std::endl;
-
+		// æœ€å‰é¢ã®ãƒ—ãƒ­ã‚»ã‚¹åã‚’å–å¾—
+		std::string foregroundProcessName = getTopWindowProcessName();
+#ifdef _DEBUG
+		std::cout << foregroundProcessName << std::endl;
+		std::cout << "device: " << device << std::endl;
+#endif
 		auto deviceType = deviceTypeRelation.find(device);
 		if (deviceType->second == DeviceType::KEY_BOARD) {
 			InterceptionKeyStroke& s = *(InterceptionKeyStroke*)& stroke; 
 #ifdef _DEBUG
-			std::wcout << L"Keyboard Input "
-			<< L"ScanCode=" << s.code
-			<< L" State=" << s.state << std::endl;
+			std::cout << "Keyboard Input "
+			<< "ScanCode=" << s.code
+			<< " State=" << s.state << std::endl;
 #endif
 			{
 				auto hidKeyMaps = keyMaps.find(device);
 				ProcessKeyMapsType::iterator processKeyMap = (hidKeyMaps != keyMaps.end()) ? hidKeyMaps->second.find(foregroundProcessName) : generalHidKeyMapIterator->second.find(foregroundProcessName);
-				if (hidKeyMaps != keyMaps.end()) { // ŠY“–HID‚Éİ’è‚ª‚ ‚é
-					if (processKeyMap != hidKeyMaps->second.end()) { // ŠY“–ƒvƒƒZƒX‚Éİ’è‚ª‚ ‚é
+				if (hidKeyMaps != keyMaps.end()) { // è©²å½“HIDã«è¨­å®šãŒã‚ã‚‹
+					if (processKeyMap != hidKeyMaps->second.end()) { // è©²å½“ãƒ—ãƒ­ã‚»ã‚¹ã«è¨­å®šãŒã‚ã‚‹
 #ifdef _DEBUG
 						if (s.code != processKeyMap->second[s.code]) {
-							std::wcout << "change code: " << s.code << std::endl;
+							std::cout << "change code: " << s.code << std::endl;
 						}
 #endif
 						s.code = processKeyMap->second[s.code];
 					}
-					else { // ŠY“–ƒvƒƒZƒX‚Éİ’è‚ª‚È‚¢
+					else { // è©²å½“ãƒ—ãƒ­ã‚»ã‚¹ã«è¨­å®šãŒãªã„
 						processKeyMap = hidKeyMaps->second.find(GENERAL_PROCESS);
 						if (processKeyMap != hidKeyMaps->second.end()) {
 #ifdef _DEBUG
 							if (s.code != processKeyMap->second[s.code]) {
-								std::wcout << "change code: " << s.code << std::endl;
+								std::cout << "change code: " << s.code << std::endl;
 							}
 #endif
 							s.code = processKeyMap->second[s.code];
@@ -96,20 +98,20 @@ int main() {
 					}
 				}
 				else {
-					if (processKeyMap != generalHidKeyMapIterator->second.end()) { // ŠY“–ƒvƒƒZƒX‚Éİ’è‚ª‚ ‚é
+					if (processKeyMap != generalHidKeyMapIterator->second.end()) { // è©²å½“ãƒ—ãƒ­ã‚»ã‚¹ã«è¨­å®šãŒã‚ã‚‹
 #ifdef _DEBUG
 						if (s.code != processKeyMap->second[s.code]) {
-							std::wcout << "change code: " << s.code << std::endl;
+							std::cout << "change code: " << s.code << std::endl;
 						}
 #endif
 						s.code = processKeyMap->second[s.code];
 					}
-					else { // ŠY“–ƒvƒƒZƒX‚Éİ’è‚ª‚È‚¢
+					else { // è©²å½“ãƒ—ãƒ­ã‚»ã‚¹ã«è¨­å®šãŒãªã„
 						processKeyMap = generalHidKeyMapIterator->second.find(GENERAL_PROCESS);
 						if (processKeyMap != generalHidKeyMapIterator->second.end()) {
 #ifdef _DEBUG
 							if (s.code != processKeyMap->second[s.code]) {
-								std::wcout << "change code: " << s.code << std::endl;
+								std::cout << "change code: " << s.code << std::endl;
 							}
 #endif
 							s.code = processKeyMap->second[s.code];
@@ -120,34 +122,36 @@ int main() {
 			interception_send(context, device, &stroke, 1);
 
 		}
-		else if (deviceType->second == DeviceType::MOUSE) { // –¢À‘•
+		else if (deviceType->second == DeviceType::MOUSE) { // æœªå®Ÿè£…
 			InterceptionMouseStroke& s = *(InterceptionMouseStroke*)& stroke;
 			interception_send(context, device, &stroke, 1);
 #ifdef _DEBUG
-			std::wcout << L"Mouse Input"
-				<< L" State=" << s.state
-				<< L" Rolling=" << s.rolling
-				<< L" Flags=" << s.flags
-				<< L" (x,y)=(" << s.x << L"," << s.y << L")"
+			std::cout << "Mouse Input"
+				<< " State=" << s.state
+				<< " Rolling=" << s.rolling
+				<< " Flags=" << s.flags
+				<< " (x,y)=(" << s.x << "," << s.y << ")"
 				<< std::endl;
 #endif
 		}
 		else {
-			//‘¼‚ÌƒfƒoƒCƒX‚Ì“ü—Í‚Í’Ê‰ß‚³‚¹‚é
+			//ä»–ã®ãƒ‡ãƒã‚¤ã‚¹ã®å…¥åŠ›ã¯é€šéã•ã›ã‚‹
 			interception_send(context, device, &stroke, 1);
 		}
 #ifdef _DEBUG
-		std::wcout << std::endl;
+		std::cout << std::endl;
 #endif
 	}
 	return 0;
 }
 
 void init() {
-	// ‚—Dæ“x‰»
+	SetConsoleOutputCP(CP_UTF8);
+	setvbuf(stdout, nullptr, _IOFBF, 1024);
+	// é«˜å„ªå…ˆåº¦åŒ–
 	SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
 
-	//Interception‚ÌƒCƒ“ƒXƒ^ƒ“ƒX¶¬
+	//Interceptionã®ã‚¤ãƒ³ã‚¹ã‚¿ãƒ³ã‚¹ç”Ÿæˆ
 	context = interception_create_context();
 	if (!context) return;
 	interception_set_filter(context, interception_is_keyboard,
@@ -161,100 +165,104 @@ void init() {
 		INTERCEPTION_FILTER_MOUSE_MIDDLE_BUTTON_UP
 	);
 
-	// HID‚ÆƒfƒoƒCƒX‚ğ•R•t‚¯‚é
+	// HIDã¨ãƒ‡ãƒã‚¤ã‚¹ã‚’ç´ä»˜ã‘ã‚‹
 	InterceptionDevice keyboard = INTERCEPTION_MAX_DEVICE, mouse = INTERCEPTION_MAX_DEVICE;
-	WCHAR buf[500] = { 0 };
+	wchar_t wbuf[501] = { 0 };
+	char buf[501] = { 0 };
 	for (int i = 0; i < INTERCEPTION_MAX_KEYBOARD; i++) {
 		InterceptionDevice d = INTERCEPTION_KEYBOARD(i);
-		if (interception_get_hardware_id(context, d, buf, sizeof(buf))) {
+		if (interception_get_hardware_id(context, d, wbuf, sizeof(buf))) {
+			size_t n;
+			wcstombs_s(&n, buf, 500, wbuf, 500);
 			hidAndDeviceRelation[buf] = d;
 			deviceTypeRelation[d] = DeviceType::KEY_BOARD;
 		}
 	}
 	for (int i = 0; i < INTERCEPTION_MAX_MOUSE; i++) {
 		InterceptionDevice d = INTERCEPTION_MOUSE(i);
-		if (interception_get_hardware_id(context, d, buf, sizeof(buf))) {
+		if (interception_get_hardware_id(context, d, wbuf, sizeof(buf))) {
+			size_t n;
+			wcstombs_s(&n, buf, 500, wbuf, 500);
 			hidAndDeviceRelation[buf] = d;
 			deviceTypeRelation[d] = DeviceType::MOUSE;
 		}
 	}
 
-	// •¶š‚©‚çƒL[ƒR[ƒh‚É•ÏŠ·‚·‚é—p‚Ìƒ}ƒbƒv‚ğì¬
+	// æ–‡å­—ã‹ã‚‰ã‚­ãƒ¼ã‚³ãƒ¼ãƒ‰ã«å¤‰æ›ã™ã‚‹ç”¨ã®ãƒãƒƒãƒ—ã‚’ä½œæˆ
 	std::iota(defaultKeyCodeMap.begin(), defaultKeyCodeMap.end(), 0);
 
-	stringAndKeyCodeRelationMap[L"esc"] = 1;
-	stringAndKeyCodeRelationMap[L"1"] = 2;
-	stringAndKeyCodeRelationMap[L"2"] = 3;
-	stringAndKeyCodeRelationMap[L"3"] = 4;
-	stringAndKeyCodeRelationMap[L"4"] = 5;
-	stringAndKeyCodeRelationMap[L"5"] = 6;
-	stringAndKeyCodeRelationMap[L"6"] = 7;
-	stringAndKeyCodeRelationMap[L"7"] = 8;
-	stringAndKeyCodeRelationMap[L"8"] = 9;
-	stringAndKeyCodeRelationMap[L"9"] = 10;
-	stringAndKeyCodeRelationMap[L"0"] = 11;
-	stringAndKeyCodeRelationMap[L"-"] = 12;
-	stringAndKeyCodeRelationMap[L"="] = 12;
-	stringAndKeyCodeRelationMap[L"^"] = 13;
-	stringAndKeyCodeRelationMap[L"up"] = 72;
-	stringAndKeyCodeRelationMap[L"left"] = 75;
-	stringAndKeyCodeRelationMap[L"right"] = 77;
-	stringAndKeyCodeRelationMap[L"down"] = 80;
-	stringAndKeyCodeRelationMap[L"~"] = 13;
-	stringAndKeyCodeRelationMap[L"bs"] = 14;
-	stringAndKeyCodeRelationMap[L"tab"] = 15;
-	stringAndKeyCodeRelationMap[L"enter"] = 28;
-	stringAndKeyCodeRelationMap[L"capclock"] = 58;
-	stringAndKeyCodeRelationMap[L"|"] = 125;
-	stringAndKeyCodeRelationMap[L"]"] = 43;
-	stringAndKeyCodeRelationMap[L"_"] = 115;
-	stringAndKeyCodeRelationMap[L"lshift"] = 42;
-	stringAndKeyCodeRelationMap[L"rshift"] = 54;
-	stringAndKeyCodeRelationMap[L"lctrl"] = 29;
-	stringAndKeyCodeRelationMap[L"lalt"] = 56;
-	stringAndKeyCodeRelationMap[L"noconvert"] = 123;
-	stringAndKeyCodeRelationMap[L"lwin"] = 91;
-	stringAndKeyCodeRelationMap[L"rwin"] = 92;
-	stringAndKeyCodeRelationMap[L"space"] = 57;
-	stringAndKeyCodeRelationMap[L"convert"] = 121;
-	stringAndKeyCodeRelationMap[L"hirakana"] = 112;
-	stringAndKeyCodeRelationMap[L"F1"] = 59;
-	stringAndKeyCodeRelationMap[L"F2"] = 60;
-	stringAndKeyCodeRelationMap[L"F3"] = 61;
-	stringAndKeyCodeRelationMap[L"F4"] = 62;
-	stringAndKeyCodeRelationMap[L"F5"] = 63;
-	stringAndKeyCodeRelationMap[L"F6"] = 64;
-	stringAndKeyCodeRelationMap[L"F7"] = 65;
-	stringAndKeyCodeRelationMap[L"F8"] = 66;
-	stringAndKeyCodeRelationMap[L"F9"] = 67;
-	stringAndKeyCodeRelationMap[L"F10"] = 68;
-	stringAndKeyCodeRelationMap[L"F11"] = 87;
-	stringAndKeyCodeRelationMap[L"F12"] = 88;
-	std::wstring keys = L"qwertyuiop@[";
+	stringAndKeyCodeRelationMap["esc"] = 1;
+	stringAndKeyCodeRelationMap["1"] = 2;
+	stringAndKeyCodeRelationMap["2"] = 3;
+	stringAndKeyCodeRelationMap["3"] = 4;
+	stringAndKeyCodeRelationMap["4"] = 5;
+	stringAndKeyCodeRelationMap["5"] = 6;
+	stringAndKeyCodeRelationMap["6"] = 7;
+	stringAndKeyCodeRelationMap["7"] = 8;
+	stringAndKeyCodeRelationMap["8"] = 9;
+	stringAndKeyCodeRelationMap["9"] = 10;
+	stringAndKeyCodeRelationMap["0"] = 11;
+	stringAndKeyCodeRelationMap["-"] = 12;
+	stringAndKeyCodeRelationMap["^"] = 13;
+	stringAndKeyCodeRelationMap["up"] = 72;
+	stringAndKeyCodeRelationMap["left"] = 75;
+	stringAndKeyCodeRelationMap["right"] = 77;
+	stringAndKeyCodeRelationMap["down"] = 80;
+	stringAndKeyCodeRelationMap["~"] = 13;
+	stringAndKeyCodeRelationMap["bs"] = 14;
+	stringAndKeyCodeRelationMap["tab"] = 15;
+	stringAndKeyCodeRelationMap["enter"] = 28;
+	stringAndKeyCodeRelationMap["capclock"] = 58;
+	stringAndKeyCodeRelationMap["|"] = 125;
+	stringAndKeyCodeRelationMap["]"] = 43;
+	stringAndKeyCodeRelationMap["_"] = 115;
+	stringAndKeyCodeRelationMap["lshift"] = 42;
+	stringAndKeyCodeRelationMap["rshift"] = 54;
+	stringAndKeyCodeRelationMap["lctrl"] = 29;
+	stringAndKeyCodeRelationMap["lalt"] = 56;
+	stringAndKeyCodeRelationMap["noconvert"] = 123;
+	stringAndKeyCodeRelationMap["lwin"] = 91;
+	stringAndKeyCodeRelationMap["rwin"] = 92;
+	stringAndKeyCodeRelationMap["space"] = 57;
+	stringAndKeyCodeRelationMap["convert"] = 121;
+	stringAndKeyCodeRelationMap["hirakana"] = 112;
+	stringAndKeyCodeRelationMap["F1"] = 59;
+	stringAndKeyCodeRelationMap["F2"] = 60;
+	stringAndKeyCodeRelationMap["F3"] = 61;
+	stringAndKeyCodeRelationMap["F4"] = 62;
+	stringAndKeyCodeRelationMap["F5"] = 63;
+	stringAndKeyCodeRelationMap["F6"] = 64;
+	stringAndKeyCodeRelationMap["F7"] = 65;
+	stringAndKeyCodeRelationMap["F8"] = 66;
+	stringAndKeyCodeRelationMap["F9"] = 67;
+	stringAndKeyCodeRelationMap["F10"] = 68;
+	stringAndKeyCodeRelationMap["F11"] = 87;
+	stringAndKeyCodeRelationMap["F12"] = 88;
+	std::string keys = "qwertyuiop@[";
 	for (int i = 0; i < keys.size(); i++) {
 		stringAndKeyCodeRelationMap[keys.substr(i, 1)] = 16 + i;
 	}
-	keys = L"asdfghjkl;:";
+	keys = "asdfghjkl;:";
 	for (int i = 0; i < keys.size(); i++) {
 		stringAndKeyCodeRelationMap[keys.substr(i, 1)] = 30 + i;
 	}
-	keys = L"zxcvbnm,./";
+	keys = "zxcvbnm,./";
 	for (int i = 0; i < keys.size(); i++) {
 		stringAndKeyCodeRelationMap[keys.substr(i, 1)] = 44 + i;
 	}
 }
 
-std::wstring getTopWindowProcessName() {
+std::string getTopWindowProcessName() {
 	DWORD lpdwProcessId;
-	wchar_t processName[MAX_PATH] = { 0 };
+	char processName[MAX_PATH] = { 0 };
 
-	// Å‘O–Ê‚ÌƒEƒBƒ“ƒhƒE‚ğæ“¾
+	// æœ€å‰é¢ã®ã‚¦ã‚£ãƒ³ãƒ‰ã‚¦ã‚’å–å¾—
 	HWND hWnd = GetForegroundWindow();
 
-	// Å‘O–Ê‚ÌƒvƒƒZƒX‚ÌPID‚ğæ“¾
+	// æœ€å‰é¢ã®ãƒ—ãƒ­ã‚»ã‚¹ã®PIDã‚’å–å¾—
 	GetWindowThreadProcessId(hWnd, &lpdwProcessId);
 
-	// ƒvƒƒZƒX‚ğƒI[ƒvƒ“
+	// ãƒ—ãƒ­ã‚»ã‚¹ã‚’ã‚ªãƒ¼ãƒ—ãƒ³
 	HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, lpdwProcessId);
 	if (NULL != hProcess) {
 		GetModuleBaseName(hProcess, NULL, processName, _countof(processName));
@@ -263,13 +271,13 @@ std::wstring getTopWindowProcessName() {
 	return processName;
 }
 
-KeyCodeType keyStringToKeyCode(std::wstring ch) {
-	if (stringAndKeyCodeRelationMap.count(ch)) { // ŠY“–‚ÌƒL[‚ª—L‚é
+KeyCodeType keyStringToKeyCode(std::string ch) {
+	if (stringAndKeyCodeRelationMap.count(ch)) { // è©²å½“ã®ã‚­ãƒ¼ãŒæœ‰ã‚‹
 		return stringAndKeyCodeRelationMap[ch];
 	}
 
-	if (ch.size() > 4 && ch.find(L"code") == 0) { // ‚»‚Ì‘¼‚Åcodexx‚ÌŒ`‚È‚çƒL[ƒR[ƒh‚ª“ü‚Á‚Ä‚¢‚é‚Í‚¸
-		std::wstring rawCode = ch.substr(4);
+	if (ch.size() > 4 && ch.find("code") == 0) { // ãã®ä»–ã§codexxã®å½¢ãªã‚‰ã‚­ãƒ¼ã‚³ãƒ¼ãƒ‰ãŒå…¥ã£ã¦ã„ã‚‹ã¯ãš
+		std::string rawCode = ch.substr(4);
 		if (std::all_of(rawCode.cbegin(), rawCode.cend(), std::isdigit)) {
 			int code = std::stoi(rawCode);
 			if (0 <= code && code < NUM_OF_KEYS) {
@@ -278,43 +286,44 @@ KeyCodeType keyStringToKeyCode(std::wstring ch) {
 		}
 	}
 
-	return 0; // ˆÓ–¡‚Ì‚È‚¢’l
+	return 0; // æ„å‘³ã®ãªã„å€¤
 }
 
 DeviceKeyMapsType getKeyMaps() {
 	DeviceKeyMapsType keyMaps;
-	std::unordered_map<InterceptionDevice, std::unordered_map<std::wstring, std::unordered_map<KeyCodeType, KeyCodeType>>> tmpKeyMaps;
+	std::unordered_map<InterceptionDevice, std::unordered_map<std::string, std::unordered_map<KeyCodeType, KeyCodeType>>> tmpKeyMaps;
 	keyMaps.insert(std::make_pair(NULL, ProcessKeyMapsType()));
 	keyMaps[GENERAL_DEVICE].insert(std::make_pair(GENERAL_PROCESS, defaultKeyCodeMap));
 
-	// İ’è“Ç‚İ‚İ
-	std::wifstream ifs(s);
-	std::wstring line, section = L"";
+	// è¨­å®šèª­ã¿è¾¼ã¿
+	std::ifstream ifs(s);
+	std::string line, section = "";
 	InterceptionDevice device = GENERAL_DEVICE;
 	while (std::getline(ifs, line)) {
 		deleteSpace(line);
+		if (line.size() > 128) continue; // æ–‡å­—ãŒé•·ã™ã
 
 		if (line.empty() || line.front() == ';') continue;
 
 		// hid
 		if (line.size() >= 5
 			&& line.front() == '[' && line[1] == '[' && line.back() == ']' && line[line.size() - 2] == ']') {
-			std::wstring hid = line.substr(2, line.size() - 4);
-			std::wcout << L"setting HID: " << hid << std::endl;
+			std::string hid = line.substr(2, line.size() - 4);
+			std::cout << "setting HID: " << hid << std::endl;
 
 			if (hid == GENERAL_DEVICE_STRING) {
 				device = GENERAL_DEVICE;
 				continue;
 			}
 
-			// HID‚É‘Î‰‚·‚éƒfƒoƒCƒX‚ª‘¶İ‚µ‚È‚¢
+			// HIDã«å¯¾å¿œã™ã‚‹ãƒ‡ãƒã‚¤ã‚¹ãŒå­˜åœ¨ã—ãªã„
 			if (!hidAndDeviceRelation.count(hid)) {
 				continue;
 			}
 
 			device = hidAndDeviceRelation[hid];
 			if (!keyMaps.count(device)) {
-				tmpKeyMaps.insert(std::make_pair(device, std::unordered_map<std::wstring, std::unordered_map<KeyCodeType, KeyCodeType>>()));
+				tmpKeyMaps.insert(std::make_pair(device, std::unordered_map<std::string, std::unordered_map<KeyCodeType, KeyCodeType>>()));
 			}
 			continue;
 		}
@@ -322,7 +331,7 @@ DeviceKeyMapsType getKeyMaps() {
 		// section
 		if (line.front() == '[' && line.back() == ']') {
 			section = line.substr(1, line.size() - 2);
-			std::wcout << L"setting process name: " << section << std::endl;
+			std::cout << "setting process name: " << section << std::endl;
 			if (!keyMaps[device].count(section)) {
 				tmpKeyMaps[device].insert(std::make_pair(section, std::unordered_map<KeyCodeType, KeyCodeType>()));
 			}
@@ -330,7 +339,7 @@ DeviceKeyMapsType getKeyMaps() {
 		}
 
 		// key = value
-		size_t equalPos = std::wstring::npos;
+		size_t equalPos = std::string::npos;
 		enum class State {NORMAL, ESCAPED};
 		State state = State::NORMAL;
 		int pos = 0;
@@ -354,33 +363,33 @@ DeviceKeyMapsType getKeyMaps() {
 			}
 			pos++;
 		}
-		// ³‚µ‚¢ = ‚ªŒ©‚Â‚©‚ç‚È‚©‚Á‚½
-		if (!equalPos || equalPos == std::wstring::npos) {
+		// æ­£ã—ã„ = ãŒè¦‹ã¤ã‹ã‚‰ãªã‹ã£ãŸ
+		if (!equalPos || equalPos == std::string::npos) {
 			continue;
 		}
-		std::wstring key = line.substr(0, equalPos);
-		std::wstring value = line.substr(equalPos + 1);
+		std::string key = line.substr(0, equalPos);
+		std::string value = line.substr(equalPos + 1);
 		tmpKeyMaps[device][section][keyStringToKeyCode(key)] = keyStringToKeyCode(value);
-		std::wcout << L"assign key: " << keyStringToKeyCode(key) << L" to " << keyStringToKeyCode(value) << std::endl;
+		std::cout << "assign key: " << keyStringToKeyCode(key) << " to " << keyStringToKeyCode(value) << std::endl;
 	}
 
 	for (auto eachHidKeyMaps : tmpKeyMaps) {
-		for (auto eachProcessKeyMap : eachHidKeyMaps.second) { // ŠeHID‚ÌŠeƒvƒƒZƒX‚²‚Æ‚ÉŒ©‚Ä‚¢‚­
+		for (auto eachProcessKeyMap : eachHidKeyMaps.second) { // å„HIDã®å„ãƒ—ãƒ­ã‚»ã‚¹ã”ã¨ã«è¦‹ã¦ã„ã
 			for (int i = 0; i < NUM_OF_KEYS; i++) {
 				KeyCodeType newKeyCode = 0;
-				// HID, ƒvƒƒZƒX–ˆ‚Ìİ’è‚É‚ ‚ê‚Î, ‚»‚ê‚ğg—p
+				// HID, ãƒ—ãƒ­ã‚»ã‚¹æ¯ã®è¨­å®šã«ã‚ã‚Œã°, ãã‚Œã‚’ä½¿ç”¨
 				if (eachProcessKeyMap.second.count(i)) {
 					newKeyCode = eachProcessKeyMap.second[i];
-				} // ‚È‚¯‚ê‚ÎHID‚²‚Æ‚Ì, ‘SƒvƒƒZƒX‹¤’Ê‚Ìİ’è‚ğg—p
+				} // ãªã‘ã‚Œã°HIDã”ã¨ã®, å…¨ãƒ—ãƒ­ã‚»ã‚¹å…±é€šã®è¨­å®šã‚’ä½¿ç”¨
 				else if (tmpKeyMaps.count(eachHidKeyMaps.first) && tmpKeyMaps[eachHidKeyMaps.first][GENERAL_PROCESS].count(i)) {
 					newKeyCode = tmpKeyMaps[eachHidKeyMaps.first][GENERAL_PROCESS][i];
-				} // ‚È‚¯‚ê‚Î, ‘SHID‹¤’Ê‚Ì, ƒvƒƒZƒX‚²‚Æ‚Ìİ’è‚©‚çg—p
+				} // ãªã‘ã‚Œã°, å…¨HIDå…±é€šã®, ãƒ—ãƒ­ã‚»ã‚¹ã”ã¨ã®è¨­å®šã‹ã‚‰ä½¿ç”¨
 				else if (tmpKeyMaps[GENERAL_DEVICE].count(eachProcessKeyMap.first) && tmpKeyMaps[GENERAL_DEVICE][eachProcessKeyMap.first].count(i)) {
 					newKeyCode = tmpKeyMaps[GENERAL_DEVICE][eachProcessKeyMap.first][i];
-				} // ‚»‚ê‚à‚È‚¯‚ê‚Î, ‘SHID‹¤’Ê, ‘SƒvƒƒZƒX‹¤’Ê‚Ìİ’è‚©‚çg—p
+				} // ãã‚Œã‚‚ãªã‘ã‚Œã°, å…¨HIDå…±é€š, å…¨ãƒ—ãƒ­ã‚»ã‚¹å…±é€šã®è¨­å®šã‹ã‚‰ä½¿ç”¨
 				else if (tmpKeyMaps[GENERAL_DEVICE][GENERAL_PROCESS].count(i)) {
 					newKeyCode = tmpKeyMaps[GENERAL_DEVICE][GENERAL_PROCESS][i];
-				} // İ’è‚ª‚È‚¯‚ê‚ÎŠù’è’l
+				} // è¨­å®šãŒãªã‘ã‚Œã°æ—¢å®šå€¤
 				else {
 					newKeyCode = i;
 				}

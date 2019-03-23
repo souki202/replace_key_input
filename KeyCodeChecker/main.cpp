@@ -14,7 +14,7 @@ void init();
 int main() {
 	init();
 
-	// “ü—Í‚ğˆ—‚·‚é
+	// å…¥åŠ›ã‚’å‡¦ç†ã™ã‚‹
 	InterceptionDevice device;
 	InterceptionStroke stroke;
 	while (interception_receive(context, device = interception_wait(context), &stroke, 1) > 0) {
@@ -42,7 +42,7 @@ int main() {
 }
 
 void init() {
-	//Interception‚ÌƒCƒ“ƒXƒ^ƒ“ƒX¶¬
+	//Interceptionã®ã‚¤ãƒ³ã‚¹ã‚¿ãƒ³ã‚¹ç”Ÿæˆ
 	context = interception_create_context();
 	if (!context) return;
 	interception_set_filter(context, interception_is_keyboard,
@@ -56,19 +56,24 @@ void init() {
 		INTERCEPTION_FILTER_MOUSE_MIDDLE_BUTTON_UP
 	);
 
-	// HID‚ÆƒfƒoƒCƒX‚ğ•R•t‚¯‚é
+	// HIDã¨ãƒ‡ãƒã‚¤ã‚¹ã‚’ç´ä»˜ã‘ã‚‹
 	InterceptionDevice keyboard = INTERCEPTION_MAX_DEVICE, mouse = INTERCEPTION_MAX_DEVICE;
-	TCHAR buf[500] = { 0 };
+	wchar_t wbuf[501] = { 0 };
+	char buf[501] = { 0 };
 	for (int i = 0; i < INTERCEPTION_MAX_KEYBOARD; i++) {
 		InterceptionDevice d = INTERCEPTION_KEYBOARD(i);
-		if (interception_get_hardware_id(context, d, buf, sizeof(buf))) {
+		if (interception_get_hardware_id(context, d, wbuf, sizeof(buf))) {
+			size_t n;
+			wcstombs_s(&n, buf, 500, wbuf, 500);
 			hidAndDeviceRelation[buf] = d;
 			deviceTypeRelation[d] = DeviceType::KEY_BOARD;
 		}
 	}
 	for (int i = 0; i < INTERCEPTION_MAX_MOUSE; i++) {
 		InterceptionDevice d = INTERCEPTION_MOUSE(i);
-		if (interception_get_hardware_id(context, d, buf, sizeof(buf))) {
+		if (interception_get_hardware_id(context, d, wbuf, sizeof(buf))) {
+			size_t n;
+			wcstombs_s(&n, buf, 500, wbuf, 500);
 			hidAndDeviceRelation[buf] = d;
 			deviceTypeRelation[d] = DeviceType::MOUSE;
 		}

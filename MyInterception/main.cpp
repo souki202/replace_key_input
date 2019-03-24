@@ -10,6 +10,7 @@
 #include <array>
 #include <numeric>
 #include <cctype>
+#include "KeyStroke.h"
 
 static constexpr int NUM_OF_KEYS = 256;
 static constexpr const char* GENERAL_PROCESS = "general";
@@ -18,22 +19,20 @@ static constexpr InterceptionDevice GENERAL_DEVICE = INT_MAX;
 
 enum class DeviceType {KEY_BOARD, MOUSE, INVALID};
 
-using KeyCodeType = unsigned char;
-using KeyMapType = std::array<int, NUM_OF_KEYS>;
+using KeyMapType = std::array<std::array<KeyStroke, 2>, NUM_OF_KEYS>;
 using ProcessKeyMapsType = std::unordered_map<std::string, KeyMapType>;
 using DeviceKeyMapsType = std::unordered_map<InterceptionDevice, ProcessKeyMapsType>;
 
 InterceptionContext context;
-std::unordered_map<std::string, KeyCodeType> stringAndKeyCodeRelationMap = {};
-std::array<KeyCodeType, 256> keyCodeAndStateRelationMap = {};
-KeyMapType defaultKeyCodeMap = { {0} };
+std::unordered_map<std::string, KeyStroke> stringAndKeyCodeRelationMap = {};
+KeyMapType defaultKeyCodeMap = { { {KeyStroke()} } };
 std::unordered_map<std::string, InterceptionDevice> hidAndDeviceRelation;
 std::unordered_map<InterceptionDevice, DeviceType> deviceTypeRelation;
 
 void init();
 std::string getTopWindowProcessName();
 DeviceKeyMapsType getKeyMaps(); // [HID][Process][OriginalKeyCode] = NewKeyCode
-KeyCodeType keyStringToKeyCode(std::string ch);
+KeyStroke keyStringToKeyStroke(std::string ch);
 
 
 static constexpr const char *s = "settings.ini";
@@ -76,58 +75,49 @@ int main() {
                 << " State=" << s.state
                 << std::endl;
 #endif
-            int oldState = s.state;
-            {
+            KeyStroke::KeyStateType oldState;
+            if (s.state < 2) oldState = KeyStroke::KeyStateType::NORMAL;
+            else if (s.state >= 2) oldState = KeyStroke::KeyStateType::ALTERNATE_KEY;
+
+            KeyStroke oldStroke = KeyStroke(s.code, oldState), newStroke = oldStroke;
+            if (oldStroke.state != KeyStroke::KeyStateType::INVALID) {
                 auto hidKeyMaps = keyMaps.find(device);
                 ProcessKeyMapsType::iterator processKeyMap = (hidKeyMaps != keyMaps.end()) ? hidKeyMaps->second.find(foregroundProcessName) : generalHidKeyMapIterator->second.find(foregroundProcessName);
                 if (hidKeyMaps != keyMaps.end()) { // 該当HIDに設定がある
                     if (processKeyMap != hidKeyMaps->second.end()) { // 該当プロセスに設定がある
-#ifdef _DEBUG
-                        if (s.code != processKeyMap->second[s.code]) {
-                            std::cout << "change code: " << processKeyMap->second[s.code] << std::endl;
-                        }
-#endif
-                        s.code = processKeyMap->second[s.code];
+                        newStroke = processKeyMap->second[oldStroke.code][static_cast<int>(oldStroke.state)];
                     }
                     else { // 該当プロセスに設定がない
                         processKeyMap = hidKeyMaps->second.find(GENERAL_PROCESS);
                         if (processKeyMap != hidKeyMaps->second.end()) {
-#ifdef _DEBUG
-                            if (s.code != processKeyMap->second[s.code]) {
-                                std::cout << "change code: " << processKeyMap->second[s.code] << std::endl;
-                            }
-#endif
-                            s.code = processKeyMap->second[s.code];
+                            newStroke = processKeyMap->second[oldStroke.code][static_cast<int>(oldStroke.state)];
                         }
                     }
                 }
                 else {
                     if (processKeyMap != generalHidKeyMapIterator->second.end()) { // 該当プロセスに設定がある
-#ifdef _DEBUG
-                        if (s.code != processKeyMap->second[s.code]) {
-                            std::cout << "change code: " << processKeyMap->second[s.code] << std::endl;
-                        }
-#endif
-                        s.code = processKeyMap->second[s.code];
+                        newStroke = processKeyMap->second[oldStroke.code][static_cast<int>(oldStroke.state)];
                     }
                     else { // 該当プロセスに設定がない
                         processKeyMap = generalHidKeyMapIterator->second.find(GENERAL_PROCESS);
                         if (processKeyMap != generalHidKeyMapIterator->second.end()) {
-#ifdef _DEBUG
-                            if (s.code != processKeyMap->second[s.code]) {
-                                std::cout << "change code: " << processKeyMap->second[s.code] << std::endl;
-                            }
-#endif
-                            s.code = processKeyMap->second[s.code];
+                            newStroke = processKeyMap->second[oldStroke.code][static_cast<int>(oldStroke.state)];
                         }
                     }
                 }
             }
-            int newState = keyCodeAndStateRelationMap[s.code];
-            if (oldState >= 2 && newState < 2) s.state -= 2;
-            else if (oldState < 2 && newState >= 2) s.state += 2;
+#ifdef _DEBUG
+            if (oldStroke != newStroke) {
+                std::cout << "change stroke: " << newStroke << std::endl;
+            }
+#endif
+            // キーが無効でなければ置き換え
+            if (newStroke.code && newStroke.state != KeyStroke::KeyStateType::INVALID) {
+                if (oldStroke.state == KeyStroke::KeyStateType::ALTERNATE_KEY && newStroke.state == KeyStroke::KeyStateType::NORMAL) s.state -= 2;
+                else if (oldStroke.state == KeyStroke::KeyStateType::NORMAL && newStroke.state == KeyStroke::KeyStateType::ALTERNATE_KEY) s.state += 2;
+                s.code = newStroke.code;
+            }
             interception_send(context, device, &stroke, 1);
-
         }
         else if (deviceType->second == DeviceType::MOUSE) { // 未実装
             InterceptionMouseStroke& s = *(InterceptionMouseStroke*)& stroke;
@@ -195,72 +185,101 @@ void init() {
     }
 
     // 文字からキーコードに変換する用のマップを作成
-    std::iota(defaultKeyCodeMap.begin(), defaultKeyCodeMap.end(), 0);
-    keyCodeAndStateRelationMap.fill(0);
+    for (int i = 0; i < NUM_OF_KEYS; i++) {
+        for (auto& state : { KeyStroke::KeyStateType::NORMAL, KeyStroke::KeyStateType::ALTERNATE_KEY }) {
+            defaultKeyCodeMap[i][static_cast<int>(state)] = KeyStroke(i, state);
+        }
+    }
 
-    stringAndKeyCodeRelationMap["esc"] = 1;
-    stringAndKeyCodeRelationMap["1"] = 2;
-    stringAndKeyCodeRelationMap["2"] = 3;
-    stringAndKeyCodeRelationMap["3"] = 4;
-    stringAndKeyCodeRelationMap["4"] = 5;
-    stringAndKeyCodeRelationMap["5"] = 6;
-    stringAndKeyCodeRelationMap["6"] = 7;
-    stringAndKeyCodeRelationMap["7"] = 8;
-    stringAndKeyCodeRelationMap["8"] = 9;
-    stringAndKeyCodeRelationMap["9"] = 10;
-    stringAndKeyCodeRelationMap["0"] = 11;
-    stringAndKeyCodeRelationMap["-"] = 12;
-    stringAndKeyCodeRelationMap["^"] = 13;
-    stringAndKeyCodeRelationMap["up"] = 72;
-    stringAndKeyCodeRelationMap["left"] = 75;
-    stringAndKeyCodeRelationMap["right"] = 77;
-    stringAndKeyCodeRelationMap["down"] = 80;
-    keyCodeAndStateRelationMap[72] = 2;
-    keyCodeAndStateRelationMap[75] = 2;
-    keyCodeAndStateRelationMap[77] = 2;
-    keyCodeAndStateRelationMap[80] = 2;
-    stringAndKeyCodeRelationMap["~"] = 13;
-    stringAndKeyCodeRelationMap["bs"] = 14;
-    stringAndKeyCodeRelationMap["tab"] = 15;
-    stringAndKeyCodeRelationMap["enter"] = 28;
-    stringAndKeyCodeRelationMap["capclock"] = 58;
-    stringAndKeyCodeRelationMap["|"] = 125;
-    stringAndKeyCodeRelationMap["]"] = 43;
-    stringAndKeyCodeRelationMap["_"] = 115;
-    stringAndKeyCodeRelationMap["lshift"] = 42;
-    stringAndKeyCodeRelationMap["rshift"] = 54;
-    stringAndKeyCodeRelationMap["lctrl"] = 29;
-    stringAndKeyCodeRelationMap["lalt"] = 56;
-    stringAndKeyCodeRelationMap["noconvert"] = 123;
-    stringAndKeyCodeRelationMap["lwin"] = 91;
-    stringAndKeyCodeRelationMap["rwin"] = 92;
-    stringAndKeyCodeRelationMap["space"] = 57;
-    stringAndKeyCodeRelationMap["convert"] = 121;
-    stringAndKeyCodeRelationMap["hirakana"] = 112;
-    stringAndKeyCodeRelationMap["F1"] = 59;
-    stringAndKeyCodeRelationMap["F2"] = 60;
-    stringAndKeyCodeRelationMap["F3"] = 61;
-    stringAndKeyCodeRelationMap["F4"] = 62;
-    stringAndKeyCodeRelationMap["F5"] = 63;
-    stringAndKeyCodeRelationMap["F6"] = 64;
-    stringAndKeyCodeRelationMap["F7"] = 65;
-    stringAndKeyCodeRelationMap["F8"] = 66;
-    stringAndKeyCodeRelationMap["F9"] = 67;
-    stringAndKeyCodeRelationMap["F10"] = 68;
-    stringAndKeyCodeRelationMap["F11"] = 87;
-    stringAndKeyCodeRelationMap["F12"] = 88;
+    stringAndKeyCodeRelationMap["esc"] = KeyStroke(1, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["1"] = KeyStroke(2, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["2"] = KeyStroke(3, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["3"] = KeyStroke(4, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["4"] = KeyStroke(5, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["5"] = KeyStroke(6, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["6"] = KeyStroke(7, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["7"] = KeyStroke(8, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["8"] = KeyStroke(9, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["9"] = KeyStroke(10, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["0"] = KeyStroke(11, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["-"] = KeyStroke(12, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["^"] = KeyStroke(13, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["up"] = KeyStroke(72, KeyStroke::KeyStateType::ALTERNATE_KEY);
+    stringAndKeyCodeRelationMap["left"] = KeyStroke(75, KeyStroke::KeyStateType::ALTERNATE_KEY);
+    stringAndKeyCodeRelationMap["right"] = KeyStroke(77, KeyStroke::KeyStateType::ALTERNATE_KEY);
+    stringAndKeyCodeRelationMap["down"] = KeyStroke(80, KeyStroke::KeyStateType::ALTERNATE_KEY);
+    stringAndKeyCodeRelationMap["bs"] = KeyStroke(14, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["tab"] = KeyStroke(15, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["enter"] = KeyStroke(28, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["capclock"] = KeyStroke(58, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["|"] = KeyStroke(125, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["]"] = KeyStroke(43, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["_"] = KeyStroke(115, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["lshift"] = KeyStroke(42, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["rshift"] = KeyStroke(54, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["lctrl"] = KeyStroke(29, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["rctrl"] = KeyStroke(29, KeyStroke::KeyStateType::ALTERNATE_KEY);
+    stringAndKeyCodeRelationMap["lalt"] = KeyStroke(56, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["ralt"] = KeyStroke(56, KeyStroke::KeyStateType::ALTERNATE_KEY);
+    stringAndKeyCodeRelationMap["noconvert"] = KeyStroke(123, KeyStroke::KeyStateType::ALTERNATE_KEY);
+    stringAndKeyCodeRelationMap["lwin"] = KeyStroke(91, KeyStroke::KeyStateType::ALTERNATE_KEY);
+    stringAndKeyCodeRelationMap["rwin"] = KeyStroke(92, KeyStroke::KeyStateType::ALTERNATE_KEY);
+    stringAndKeyCodeRelationMap["space"] = KeyStroke(57, KeyStroke::KeyStateType::ALTERNATE_KEY);
+    stringAndKeyCodeRelationMap["convert"] = KeyStroke(121, KeyStroke::KeyStateType::ALTERNATE_KEY);
+    stringAndKeyCodeRelationMap["hirakana"] = KeyStroke(112, KeyStroke::KeyStateType::ALTERNATE_KEY);
+    stringAndKeyCodeRelationMap["F1"] = KeyStroke(59, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["F2"] = KeyStroke(60, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["F3"] = KeyStroke(61, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["F4"] = KeyStroke(62, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["F5"] = KeyStroke(63, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["F6"] = KeyStroke(64, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["F7"] = KeyStroke(65, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["F8"] = KeyStroke(66, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["F9"] = KeyStroke(67, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["F10"] = KeyStroke(68, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["F11"] = KeyStroke(87, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["F12"] = KeyStroke(88, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["ins"] = KeyStroke(82, KeyStroke::KeyStateType::ALTERNATE_KEY);
+    stringAndKeyCodeRelationMap["delete"] = KeyStroke(83, KeyStroke::KeyStateType::ALTERNATE_KEY);
+    stringAndKeyCodeRelationMap["home"] = KeyStroke(71, KeyStroke::KeyStateType::ALTERNATE_KEY);
+    stringAndKeyCodeRelationMap["end"] = KeyStroke(79, KeyStroke::KeyStateType::ALTERNATE_KEY);
+    stringAndKeyCodeRelationMap["pgup"] = KeyStroke(73, KeyStroke::KeyStateType::ALTERNATE_KEY);
+    stringAndKeyCodeRelationMap["pgdn"] = KeyStroke(81, KeyStroke::KeyStateType::ALTERNATE_KEY);
+    stringAndKeyCodeRelationMap["ps"] = KeyStroke(55, KeyStroke::KeyStateType::ALTERNATE_KEY);
+    stringAndKeyCodeRelationMap["sclock"] = KeyStroke(70, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["pb"] = KeyStroke(69, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["menu"] = KeyStroke(93, KeyStroke::KeyStateType::ALTERNATE_KEY);
     std::string keys = "qwertyuiop@[";
     for (int i = 0; i < keys.size(); i++) {
-        stringAndKeyCodeRelationMap[keys.substr(i, 1)] = 16 + i;
+        stringAndKeyCodeRelationMap[keys.substr(i, 1)] = KeyStroke(16 + i, KeyStroke::KeyStateType::NORMAL);
     }
     keys = "asdfghjkl;:";
     for (int i = 0; i < keys.size(); i++) {
-        stringAndKeyCodeRelationMap[keys.substr(i, 1)] = 30 + i;
+        stringAndKeyCodeRelationMap[keys.substr(i, 1)] = KeyStroke(30 + i, KeyStroke::KeyStateType::NORMAL);
     }
     keys = "zxcvbnm,./";
     for (int i = 0; i < keys.size(); i++) {
-        stringAndKeyCodeRelationMap[keys.substr(i, 1)] = 44 + i;
+        stringAndKeyCodeRelationMap[keys.substr(i, 1)] = KeyStroke(44 + i, KeyStroke::KeyStateType::NORMAL);
     }
+    
+    // ここからテンキー
+    stringAndKeyCodeRelationMap["t0"] = KeyStroke(82, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["t1"] = KeyStroke(79, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["t2"] = KeyStroke(80, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["t3"] = KeyStroke(81, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["t4"] = KeyStroke(75, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["t5"] = KeyStroke(76, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["t6"] = KeyStroke(77, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["t7"] = KeyStroke(71, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["t8"] = KeyStroke(72, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["t9"] = KeyStroke(73, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["tenter"] = KeyStroke(28, KeyStroke::KeyStateType::ALTERNATE_KEY);
+    stringAndKeyCodeRelationMap["t+"] = KeyStroke(78, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["t-"] = KeyStroke(74, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["t*"] = KeyStroke(55, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["t/"] = KeyStroke(53, KeyStroke::KeyStateType::ALTERNATE_KEY);
+    stringAndKeyCodeRelationMap["numlock"] = KeyStroke(69, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["t."] = KeyStroke(83, KeyStroke::KeyStateType::NORMAL);
 }
 
 std::string getTopWindowProcessName() {
@@ -282,27 +301,27 @@ std::string getTopWindowProcessName() {
     return processName;
 }
 
-KeyCodeType keyStringToKeyCode(std::string ch) {
+KeyStroke keyStringToKeyStroke(std::string ch) {
     if (stringAndKeyCodeRelationMap.count(ch)) { // 該当のキーが有る
         return stringAndKeyCodeRelationMap[ch];
     }
 
-    if (ch.size() > 4 && ch.find("code") == 0) { // その他でcodexxの形ならキーコードが入っているはず
+    if (ch.size() > 4 && ch.find("code") == 0) { // その他でcodexxの形ならキーコードが入っているはず. stateはとりあえずNORMALとする
         std::string rawCode = ch.substr(4);
         if (std::all_of(rawCode.cbegin(), rawCode.cend(), std::isdigit)) {
             int code = std::stoi(rawCode);
             if (0 <= code && code < NUM_OF_KEYS) {
-                return code;
+                return KeyStroke(code, KeyStroke::KeyStateType::NORMAL);
             }
         }
     }
 
-    return 0; // 意味のない値
+    return KeyStroke(); // 意味のない値
 }
 
 DeviceKeyMapsType getKeyMaps() {
     DeviceKeyMapsType keyMaps;
-    std::unordered_map<InterceptionDevice, std::unordered_map<std::string, std::unordered_map<KeyCodeType, KeyCodeType>>> tmpKeyMaps;
+    std::unordered_map<InterceptionDevice, std::unordered_map<std::string, std::unordered_map<KeyStroke, KeyStroke, KeyStrokeHash>>> tmpKeyMaps;
     keyMaps.insert(std::make_pair(NULL, ProcessKeyMapsType()));
     keyMaps[GENERAL_DEVICE].insert(std::make_pair(GENERAL_PROCESS, defaultKeyCodeMap));
 
@@ -334,7 +353,7 @@ DeviceKeyMapsType getKeyMaps() {
 
             device = hidAndDeviceRelation[hid];
             if (!keyMaps.count(device)) {
-                tmpKeyMaps.insert(std::make_pair(device, std::unordered_map<std::string, std::unordered_map<KeyCodeType, KeyCodeType>>()));
+                tmpKeyMaps.insert(std::make_pair(device, std::unordered_map<std::string, std::unordered_map<KeyStroke, KeyStroke, KeyStrokeHash>>()));
             }
             continue;
         }
@@ -344,7 +363,7 @@ DeviceKeyMapsType getKeyMaps() {
             section = line.substr(1, line.size() - 2);
             std::cout << "setting process name: " << section << std::endl;
             if (!keyMaps[device].count(section)) {
-                tmpKeyMaps[device].insert(std::make_pair(section, std::unordered_map<KeyCodeType, KeyCodeType>()));
+                tmpKeyMaps[device].insert(std::make_pair(section, std::unordered_map<KeyStroke, KeyStroke, KeyStrokeHash>()));
             }
             continue;
         }
@@ -380,31 +399,33 @@ DeviceKeyMapsType getKeyMaps() {
         }
         std::string key = line.substr(0, equalPos);
         std::string value = line.substr(equalPos + 1);
-        tmpKeyMaps[device][section][keyStringToKeyCode(key)] = keyStringToKeyCode(value);
-        std::cout << "assign key: " << static_cast<int>(keyStringToKeyCode(key)) << " to " << static_cast<int>(keyStringToKeyCode(value)) << std::endl;
+        tmpKeyMaps[device][section][keyStringToKeyStroke(key)] = keyStringToKeyStroke(value);
+        std::cout << "assign key: " << keyStringToKeyStroke(key) << " to " << keyStringToKeyStroke(value) << std::endl;
     }
 
     for (auto eachHidKeyMaps : tmpKeyMaps) {
         for (auto eachProcessKeyMap : eachHidKeyMaps.second) { // 各HIDの各プロセスごとに見ていく
             for (int i = 0; i < NUM_OF_KEYS; i++) {
-                KeyCodeType newKeyCode = 0;
-                // HID, プロセス毎の設定にあれば, それを使用
-                if (eachProcessKeyMap.second.count(i)) {
-                    newKeyCode = eachProcessKeyMap.second[i];
-                } // なければHIDごとの, 全プロセス共通の設定を使用
-                else if (tmpKeyMaps.count(eachHidKeyMaps.first) && tmpKeyMaps[eachHidKeyMaps.first][GENERAL_PROCESS].count(i)) {
-                    newKeyCode = tmpKeyMaps[eachHidKeyMaps.first][GENERAL_PROCESS][i];
-                } // なければ, 全HID共通の, プロセスごとの設定から使用
-                else if (tmpKeyMaps[GENERAL_DEVICE].count(eachProcessKeyMap.first) && tmpKeyMaps[GENERAL_DEVICE][eachProcessKeyMap.first].count(i)) {
-                    newKeyCode = tmpKeyMaps[GENERAL_DEVICE][eachProcessKeyMap.first][i];
-                } // それもなければ, 全HID共通, 全プロセス共通の設定から使用
-                else if (tmpKeyMaps[GENERAL_DEVICE][GENERAL_PROCESS].count(i)) {
-                    newKeyCode = tmpKeyMaps[GENERAL_DEVICE][GENERAL_PROCESS][i];
-                } // 設定がなければ既定値
-                else {
-                    newKeyCode = i;
+                for (auto& state : { KeyStroke::KeyStateType::NORMAL, KeyStroke::KeyStateType::ALTERNATE_KEY }) {
+                    KeyStroke newKeyCode = KeyStroke(), targetStroke = KeyStroke(i, state);
+                    // HID, プロセス毎の設定にあれば, それを使用
+                    if (eachProcessKeyMap.second.count(targetStroke)) {
+                        newKeyCode = eachProcessKeyMap.second[targetStroke];
+                    } // なければHIDごとの, 全プロセス共通の設定を使用
+                    else if (tmpKeyMaps.count(eachHidKeyMaps.first) && tmpKeyMaps[eachHidKeyMaps.first][GENERAL_PROCESS].count(targetStroke)) {
+                        newKeyCode = tmpKeyMaps[eachHidKeyMaps.first][GENERAL_PROCESS][targetStroke];
+                    } // なければ, 全HID共通の, プロセスごとの設定から使用
+                    else if (tmpKeyMaps[GENERAL_DEVICE].count(eachProcessKeyMap.first) && tmpKeyMaps[GENERAL_DEVICE][eachProcessKeyMap.first].count(targetStroke)) {
+                        newKeyCode = tmpKeyMaps[GENERAL_DEVICE][eachProcessKeyMap.first][targetStroke];
+                    } // それもなければ, 全HID共通, 全プロセス共通の設定から使用
+                    else if (tmpKeyMaps[GENERAL_DEVICE][GENERAL_PROCESS].count(targetStroke)) {
+                        newKeyCode = tmpKeyMaps[GENERAL_DEVICE][GENERAL_PROCESS][targetStroke];
+                    } // 設定がなければ既定値
+                    else {
+                        newKeyCode = targetStroke;
+                    }
+                    keyMaps[eachHidKeyMaps.first][eachProcessKeyMap.first][targetStroke.code][static_cast<int>(targetStroke.state)] = newKeyCode;
                 }
-                keyMaps[eachHidKeyMaps.first][eachProcessKeyMap.first][i] = newKeyCode;
             }
         }
     }

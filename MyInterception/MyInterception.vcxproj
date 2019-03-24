@@ -130,6 +130,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="interception.h" />
+    <ClInclude Include="KeyStroke.h" />
   </ItemGroup>
   <ItemGroup>
     <Library Include="x64\interception.lib" />

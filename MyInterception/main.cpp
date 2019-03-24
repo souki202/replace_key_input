@@ -221,12 +221,12 @@ void init() {
     stringAndKeyCodeRelationMap["rctrl"] = KeyStroke(29, KeyStroke::KeyStateType::ALTERNATE_KEY);
     stringAndKeyCodeRelationMap["lalt"] = KeyStroke(56, KeyStroke::KeyStateType::NORMAL);
     stringAndKeyCodeRelationMap["ralt"] = KeyStroke(56, KeyStroke::KeyStateType::ALTERNATE_KEY);
-    stringAndKeyCodeRelationMap["noconvert"] = KeyStroke(123, KeyStroke::KeyStateType::ALTERNATE_KEY);
+    stringAndKeyCodeRelationMap["noconvert"] = KeyStroke(123, KeyStroke::KeyStateType::NORMAL);
     stringAndKeyCodeRelationMap["lwin"] = KeyStroke(91, KeyStroke::KeyStateType::ALTERNATE_KEY);
     stringAndKeyCodeRelationMap["rwin"] = KeyStroke(92, KeyStroke::KeyStateType::ALTERNATE_KEY);
-    stringAndKeyCodeRelationMap["space"] = KeyStroke(57, KeyStroke::KeyStateType::ALTERNATE_KEY);
-    stringAndKeyCodeRelationMap["convert"] = KeyStroke(121, KeyStroke::KeyStateType::ALTERNATE_KEY);
-    stringAndKeyCodeRelationMap["hirakana"] = KeyStroke(112, KeyStroke::KeyStateType::ALTERNATE_KEY);
+    stringAndKeyCodeRelationMap["space"] = KeyStroke(57, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["convert"] = KeyStroke(121, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["hirakana"] = KeyStroke(112, KeyStroke::KeyStateType::NORMAL);
     stringAndKeyCodeRelationMap["F1"] = KeyStroke(59, KeyStroke::KeyStateType::NORMAL);
     stringAndKeyCodeRelationMap["F2"] = KeyStroke(60, KeyStroke::KeyStateType::NORMAL);
     stringAndKeyCodeRelationMap["F3"] = KeyStroke(61, KeyStroke::KeyStateType::NORMAL);

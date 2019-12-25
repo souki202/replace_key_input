@@ -293,7 +293,8 @@ std::string getTopWindowProcessName() {
     GetWindowThreadProcessId(hWnd, &lpdwProcessId);
 
     // プロセスをオープン
-    HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, lpdwProcessId);
+    HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, lpdwProcessId);
+
     if (NULL != hProcess) {
         GetModuleBaseName(hProcess, NULL, processName, _countof(processName));
     }

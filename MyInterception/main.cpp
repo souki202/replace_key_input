@@ -10,6 +10,8 @@
 #include <array>
 #include <numeric>
 #include <cctype>
+#include <thread>
+#include <chrono>
 #include "KeyStroke.h"
 
 static constexpr int NUM_OF_KEYS = 256;
@@ -31,6 +33,7 @@ std::unordered_map<InterceptionDevice, DeviceType> deviceTypeRelation;
 
 void init();
 std::string getTopWindowProcessName();
+void updateTopWindowProcessName(std::string& processNameStringRef);
 DeviceKeyMapsType getKeyMaps(); // [HID][Process][OriginalKeyCode] = NewKeyCode
 KeyStroke keyStringToKeyStroke(std::string ch);
 
@@ -50,18 +53,21 @@ int main() {
     init();
     if (!context) return 0;
 
-    // ボタン押させるたびにini(もどき)を読むわけに行かないので, 先にすべて読みこんでおく
+    // 設定読み込み
     auto keyMaps = getKeyMaps();
     auto generalHidKeyMapIterator = keyMaps.find(GENERAL_DEVICE);
 
+    std::string topWindowProcessName = "";
+    std::thread updateTopWindowProcessThread(updateTopWindowProcessName, std::ref(topWindowProcessName));
+
     InterceptionDevice device;
     InterceptionStroke stroke;
+    
+    KeyStroke oldStroke, newStroke;
 
     std::cout << "キー入力受付中..." << std::endl;
 
     while (interception_receive(context, device = interception_wait(context), &stroke, 1) > 0) {
-        // 最前面のプロセス名を取得
-        std::string foregroundProcessName = getTopWindowProcessName();
 #ifdef _DEBUG
         std::cout << foregroundProcessName << std::endl;
         std::cout << "device: " << device << std::endl;
@@ -79,10 +85,10 @@ int main() {
             if (s.state < 2) oldState = KeyStroke::KeyStateType::NORMAL;
             else if (s.state >= 2) oldState = KeyStroke::KeyStateType::ALTERNATE_KEY;
 
-            KeyStroke oldStroke = KeyStroke(s.code, oldState), newStroke = oldStroke;
+            oldStroke = KeyStroke(s.code, oldState), newStroke = oldStroke;
             if (oldStroke.state != KeyStroke::KeyStateType::INVALID) {
                 auto hidKeyMaps = keyMaps.find(device);
-                ProcessKeyMapsType::iterator processKeyMap = (hidKeyMaps != keyMaps.end()) ? hidKeyMaps->second.find(foregroundProcessName) : generalHidKeyMapIterator->second.find(foregroundProcessName);
+                ProcessKeyMapsType::iterator processKeyMap = (hidKeyMaps != keyMaps.end()) ? hidKeyMaps->second.find(topWindowProcessName) : generalHidKeyMapIterator->second.find(topWindowProcessName);
                 if (hidKeyMaps != keyMaps.end()) { // 該当HIDに設定がある
                     if (processKeyMap != hidKeyMaps->second.end()) { // 該当プロセスに設定がある
                         newStroke = processKeyMap->second[oldStroke.code][static_cast<int>(oldStroke.state)];
@@ -300,6 +306,17 @@ std::string getTopWindowProcessName() {
     }
 
     return processName;
+}
+
+void updateTopWindowProcessName(std::string& processNameStringRef) {
+    while (1) {
+        processNameStringRef = getTopWindowProcessName();
+#ifdef _DEBUG
+        std::cout << "前面プロセス名更新" << processNameStringRef << std::endl;
+#endif // _DEBUG
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
 }
 
 KeyStroke keyStringToKeyStroke(std::string ch) {

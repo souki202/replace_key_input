@@ -12,6 +12,7 @@
 #include <cctype>
 #include <thread>
 #include <chrono>
+#include <algorithm>
 #include "KeyStroke.h"
 
 static constexpr int NUM_OF_KEYS = 256;
@@ -217,7 +218,7 @@ void init() {
     stringAndKeyCodeRelationMap["bs"] = KeyStroke(14, KeyStroke::KeyStateType::NORMAL);
     stringAndKeyCodeRelationMap["tab"] = KeyStroke(15, KeyStroke::KeyStateType::NORMAL);
     stringAndKeyCodeRelationMap["enter"] = KeyStroke(28, KeyStroke::KeyStateType::NORMAL);
-    stringAndKeyCodeRelationMap["capclock"] = KeyStroke(58, KeyStroke::KeyStateType::NORMAL);
+    stringAndKeyCodeRelationMap["capslock"] = KeyStroke(58, KeyStroke::KeyStateType::NORMAL);
     stringAndKeyCodeRelationMap["|"] = KeyStroke(125, KeyStroke::KeyStateType::NORMAL);
     stringAndKeyCodeRelationMap["]"] = KeyStroke(43, KeyStroke::KeyStateType::NORMAL);
     stringAndKeyCodeRelationMap["_"] = KeyStroke(115, KeyStroke::KeyStateType::NORMAL);
